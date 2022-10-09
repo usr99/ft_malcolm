@@ -1,0 +1,12 @@
+# VScode configuration
+.vscode
+
+# Objects files
+objs
+
+# Executables
+a.out
+ft_malcolm
+
+# Misc.
+test.c
