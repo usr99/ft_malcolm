@@ -10,7 +10,7 @@ CC		= gcc
 INC 	= -I ./include -I ./libft
 
 SRCDIR	= ./src/
-SRC		= main.c address_format.c utils.c
+SRC		= main.c address_format.c utils.c arp.c
 HEADER	= ./include/ft_malcolm.h
 
 OBJDIR	= ./objs/
