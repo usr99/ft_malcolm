@@ -6,7 +6,7 @@
 /*   By: mamartin <mamartin@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2022/10/04 19:03:49 by mamartin          #+#    #+#             */
-/*   Updated: 2022/10/12 14:21:26 by mamartin         ###   ########.fr       */
+/*   Updated: 2022/10/15 18:15:37 by mamartin         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -87,6 +87,9 @@ static void sigint_handler(int signum)
 
 int main(int argc, char **argv)
 {
+	if (getuid() != 0)
+		failure("root privileges are needed to create packet socket", -1);
+
 	if (argc != 5)
 		print_usage(argv[0]); // exit
 	signal(SIGINT, &sigint_handler);
@@ -95,9 +98,6 @@ int main(int argc, char **argv)
 	t_host target = {0};
 	if (validate_arguments(argv, &source, &target) == -1)
 		return EXIT_FAILURE;
-
-	if (getuid() != 0)
-		failure("root privileges are needed to create packet socket", -1);
 
 	int ifindex = get_interface_index();
 	if (ifindex == -1)
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
 
 	while (!g_must_exit)
 	{
-		int ret = wait_arp_request(sock, &source, &target);
+		int ret = wait_arp_request(sock);
 		if (ret == -1)
 			failure("failed to receive ARP request", sock);
 		else if (ret)

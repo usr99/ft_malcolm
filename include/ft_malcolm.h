@@ -6,7 +6,7 @@
 /*   By: mamartin <mamartin@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2022/10/09 00:30:59 by mamartin          #+#    #+#             */
-/*   Updated: 2022/10/12 13:44:47 by mamartin         ###   ########.fr       */
+/*   Updated: 2022/10/15 18:15:30 by mamartin         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -36,7 +36,7 @@ typedef struct s_arpmsg
 } t_arpmsg;
 
 /* arp.c */
-int wait_arp_request(int sock, t_host* source, t_host* target);
+int wait_arp_request(int sock);
 int send_arp_reply(int sock, int ifindex, t_host* source, t_host* target);
 
 /* address_format.c */

@@ -6,7 +6,7 @@
 /*   By: mamartin <mamartin@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2022/10/09 14:38:18 by mamartin          #+#    #+#             */
-/*   Updated: 2022/10/12 14:16:57 by mamartin         ###   ########.fr       */
+/*   Updated: 2022/10/15 18:15:26 by mamartin         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,7 @@
 
 #include "ft_malcolm.h"
 
-static int validate_arp_request(t_arpmsg* frame, t_host* source, t_host* target)
+static int validate_arp_request(t_arpmsg* frame)
 {
 	return (
 		frame->hdr.h_proto = ntohs(ETH_P_ARP) && // ARP protocol
@@ -24,13 +24,11 @@ static int validate_arp_request(t_arpmsg* frame, t_host* source, t_host* target)
 		frame->data.arp_pro == htons(ETH_P_IP) &&
 		frame->data.arp_hln == ETHER_ADDR_LEN &&
 		frame->data.arp_pln == sizeof(in_addr_t) &&
-		frame->data.arp_op == htons(ARPOP_REQUEST) && // request
-		ft_memcmp(frame->data.arp_spa, target->ip, sizeof(in_addr_t)) == 0 && // from target
-		ft_memcmp(frame->data.arp_tpa, source->ip, sizeof(in_addr_t)) == 0 // about source
+		frame->data.arp_op == htons(ARPOP_REQUEST) // request
 	);
 }
 
-int wait_arp_request(int sock, t_host* source, t_host* target)
+int wait_arp_request(int sock)
 {
 	static char buf[200] = { 0 };
 	ssize_t bytes = recvfrom(sock, buf, sizeof(buf), 0, NULL, NULL);
@@ -39,7 +37,7 @@ int wait_arp_request(int sock, t_host* source, t_host* target)
 
 	if ((size_t)bytes < sizeof(t_arpmsg))
 		return 0; // ethernet frame is too small to hold ARP request
-	return validate_arp_request((t_arpmsg*)buf, source, target);
+	return validate_arp_request((t_arpmsg*)buf);
 }
 
 int send_arp_reply(int sock, int ifindex, t_host* source, t_host* target)
